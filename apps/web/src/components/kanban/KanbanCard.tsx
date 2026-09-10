@@ -17,6 +17,7 @@ interface KanbanCardProps {
 export function KanbanCard({ ticket, isOverlay, onClick, onDelete }: KanbanCardProps) {
   const {
     setNodeRef,
+    setActivatorNodeRef,
     attributes,
     listeners,
     transform,
@@ -70,7 +71,6 @@ export function KanbanCard({ ticket, isOverlay, onClick, onDelete }: KanbanCardP
     <div
       ref={setNodeRef}
       style={style}
-      {...attributes} // Attach attributes to the card
       className={`relative group bg-card hover:bg-card/80 border border-border/40 hover:border-border p-3.5 rounded-xl shadow-sm hover:shadow-md transition-all duration-200 cursor-grab active:cursor-grabbing ${isOverlay ? 'shadow-2xl ring-2 ring-primary/20 rotate-2 cursor-grabbing' : ''
         }`}
     >
@@ -121,10 +121,16 @@ export function KanbanCard({ ticket, isOverlay, onClick, onDelete }: KanbanCardP
       )}
 
       {/* Main Card Content - Drag Handle Area */}
+      {/* Activator node per dnd-kit docs (https://docs.dndkit.com/presets/sortable/usesortable#activator-node):
+          attributes (role/tabIndex/aria) and listeners (keydown/pointerdown) must live on the
+          SAME focusable element; setActivatorNodeRef marks it as the drag activator so keyboard
+          focus lands where the activation handlers are (upstream issue anaskasmi/local-pm#3). */}
       <div
+        ref={setActivatorNodeRef}
+        {...attributes}
         {...listeners}
         onClick={onClick}
-        className="space-y-3"
+        className="space-y-3 outline-none focus-visible:ring-2 focus-visible:ring-primary/40 rounded-lg"
       >
         {/* Header: Project Badge & Priority */}
         <div className="flex items-center justify-between">
