@@ -1,7 +1,7 @@
 import type { CollectionConfig, PayloadRequest } from 'payload'
 import { APIError } from 'payload'
 import { TicketPriority, TICKET_PRIORITY_OPTIONS } from '@/types/enums'
-import { collectionAccess } from '@/lib/access'
+import { ticketsAccess } from '@/lib/access'
 import { diffTicket, idOf } from '@/lib/activity'
 import { TICKET_DATES, pendingDateOrderError } from '@/lib/dates'
 import { MAX_ESTIMATE, normalizeEstimate } from '@/lib/estimates'
@@ -13,7 +13,7 @@ export const Tickets: CollectionConfig = {
     defaultColumns: ['ticketId', 'title', 'status', 'priority', 'project', 'assignee'],
     description: 'Individual work items within projects',
   },
-  access: collectionAccess,
+  access: ticketsAccess,
   hooks: {
     beforeChange: [
       async ({ data, req, operation, originalDoc }) => {

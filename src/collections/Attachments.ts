@@ -1,7 +1,7 @@
 import path from 'path'
 import type { CollectionConfig } from 'payload'
 import { APIError } from 'payload'
-import { collectionAccess } from '@/lib/access'
+import { attachmentsAccess } from '@/lib/access'
 import { MAX_ATTACHMENT_BYTES, ATTACHMENT_MIME_TYPES, formatBytes } from '@/lib/attachments'
 
 const staticDir = process.env.LOCAL_PM_UPLOADS_DIR || path.resolve(process.cwd(), 'uploads')
@@ -13,7 +13,7 @@ export const Attachments: CollectionConfig = {
     defaultColumns: ['filename', 'mimeType', 'filesize', 'createdAt'],
     description: 'Files dropped, pasted, or picked inside a comment or a description.',
   },
-  access: collectionAccess,
+  access: attachmentsAccess,
   upload: {
     staticDir,
     mimeTypes: ATTACHMENT_MIME_TYPES,

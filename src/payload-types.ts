@@ -163,7 +163,7 @@ export interface User {
    */
   name?: string | null;
   /**
-   * admin may delete records and manage accounts; member may read and write; agent is an automated caller and should hold an API key rather than a password. Defaults to admin so the first account created can administer the install.
+   * admin may delete records and manage accounts; member may read and write; agent is an automated caller and should hold an API key rather than a password. The FIRST account created is promoted to admin automatically; every later account defaults to member.
    */
   role: 'admin' | 'member' | 'agent';
   updatedAt: string;
@@ -427,6 +427,14 @@ export interface Member {
    * The login account this person signs in with. Set it and "My tickets" works for them.
    */
   user?: (string | null) | User;
+  /**
+   * Projects this person can open. Empty means no project access; only admins of the install see everything.
+   */
+  projects?: (string | Project)[] | null;
+  /**
+   * What this person can do inside their projects. Viewer reads, member also writes, admin also deletes. Ignored outside the projects above.
+   */
+  projectRole?: ('admin' | 'member' | 'viewer') | null;
   updatedAt: string;
   createdAt: string;
 }
@@ -1140,6 +1148,8 @@ export interface MembersSelect<T extends boolean = true> {
   team?: T;
   active?: T;
   user?: T;
+  projects?: T;
+  projectRole?: T;
   updatedAt?: T;
   createdAt?: T;
 }

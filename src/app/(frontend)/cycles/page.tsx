@@ -6,6 +6,8 @@ import { cycleProgress, sortCycles } from '@/lib/cycles'
 import { loadVelocity } from '@/lib/burndown-service'
 import { VELOCITY_WINDOW } from '@/lib/burndown'
 import { CycleAutomation } from '@/types/enums'
+import { requireUser, authRequired, scopedLocalArgs, hasNoProjectGrants } from '@/lib/rbac'
+import { SignedOutGate } from '@/components/ui/SignedOutGate'
 import type { Cycle, Project } from '@/payload-types'
 
 export const dynamic = 'force-dynamic'
@@ -19,8 +21,24 @@ interface CyclesPageProps {
 export default async function CyclesPage({ searchParams }: CyclesPageProps) {
   const { project: requested } = await searchParams
   const payload = await getPayload({ config })
+  const user = authRequired() ? await requireUser() : null
 
-  const project = await resolveProject(payload, requested)
+  // my-tickets pattern: no usable session → sign-in gate; orphan → no-projects
+  // gate. Cycles are project-scoped, so both shapes would only deny below.
+  if (authRequired() && !user) {
+    return <SignedOutGate title="Cycles" />
+  }
+  if (authRequired() && (await hasNoProjectGrants(user))) {
+    return <SignedOutGate title="Cycles" orphan />
+  }
+
+  const authedArgs: Record<string, unknown> = {}
+  if (authRequired()) {
+    authedArgs.user = user ?? undefined
+    authedArgs.overrideAccess = false
+  }
+
+  const project = await resolveProject(payload, requested, authedArgs)
 
   if (!project) {
     return <CyclesView project={null} summaries={[]} manual={false} />
@@ -41,12 +59,14 @@ export default async function CyclesPage({ searchParams }: CyclesPageProps) {
       sort: '-number',
       limit: 200,
       depth: 0,
+      ...authedArgs,
     }),
     payload.find({
       collection: 'tickets',
       where: { project: { equals: project.id }, cycle: { exists: true } },
       limit: 2000,
       depth: 1,
+      ...authedArgs,
     }),
   ])
 
@@ -84,6 +104,7 @@ export default async function CyclesPage({ searchParams }: CyclesPageProps) {
 async function resolveProject(
   payload: Awaited<ReturnType<typeof getPayload>>,
   requested: string | undefined,
+  authedArgs: Record<string, unknown> = {},
 ): Promise<Project | null> {
   if (requested) {
     try {
@@ -91,6 +112,7 @@ async function resolveProject(
         collection: 'projects',
         id: requested,
         depth: 0,
+        ...authedArgs,
       })) as Project
     } catch {
       return null
@@ -103,6 +125,7 @@ async function resolveProject(
     sort: 'name',
     limit: 1,
     depth: 0,
+    ...authedArgs,
   })
 
   return (enabled.docs[0] as Project) ?? null

@@ -1,7 +1,7 @@
 import type { CollectionConfig, PayloadRequest } from 'payload'
 import { APIError } from 'payload'
 import type { Cycle, Project } from '@/payload-types'
-import { collectionAccess, requireAuthEnabled } from '@/lib/access'
+import { cyclesAccess, requireAuthEnabled } from '@/lib/access'
 import { closeCycleNow, reconcileAllProjects, reconcileProjectCycles } from '@/lib/cycle-service'
 import { loadBurndown, loadVelocity, snapshotOf } from '@/lib/burndown-service'
 import { defaultCycleName, toIsoDate } from '@/lib/cycles'
@@ -30,7 +30,7 @@ export const Cycles: CollectionConfig = {
     defaultColumns: ['name', 'number', 'project', 'startsAt', 'endsAt', 'completedAt'],
     description: 'Time-boxed cycles that incomplete work rolls out of when they end',
   },
-  access: collectionAccess,
+  access: cyclesAccess,
   endpoints: [
     {
       path: '/reconcile',

@@ -6,6 +6,16 @@ A Model Context Protocol (MCP) server for Local PM - a lightweight project manag
 
 This MCP server provides AI models with full access to Local PM functionality:
 
+### Workspace scoping (task 41)
+
+Set `LOCAL_PM_API_KEY` (the acting account's Users API key) and list/get tools
+are scoped to the linked member's projects: `list_projects`, `list_tickets`,
+`get_board` and `list_initiatives` return only visible projects; `get_ticket`,
+`get_project`, `list_comments`, `list_activity` and `add_comment` refuse
+content outside them. Install-admin accounts (Users.role `admin`) still see
+everything, and an unresolvable actor sees nothing (fail closed). Without an
+API key the server's `LOCAL_PM_REQUIRE_AUTH` setting governs access as before.
+
 ### Projects
 - `list_projects` - List all projects with pagination
 - `get_project` - Get project details by ID
@@ -98,6 +108,7 @@ This makes `local-pm-mcp` available globally.
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `LOCAL_PM_URL` | `http://localhost:3010` | Base URL of Local PM instance |
+| `LOCAL_PM_API_KEY` | _(unset)_ | Acting account's API key. Enables workspace scoping (task 41) and authenticates every call |
 
 ### Claude Desktop Configuration
 

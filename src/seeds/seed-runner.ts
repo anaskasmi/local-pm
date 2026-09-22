@@ -344,15 +344,21 @@ async function seed() {
 
   const payload = await getPayload({ config })
 
+  // Local-API calls default to overrideAccess:true, so seeding works with
+  // auth off or on. When LOCAL_PM_REQUIRE_AUTH=true the service context still
+  // has no req.user — pass an explicit override so a future default flip
+  // cannot 403 the seed path (see CREDITS.md, task 39).
+  const serviceArgs = { overrideAccess: true as const }
+
   console.log('Clearing existing data...')
-  await payload.delete({ collection: 'comments', where: {} })
-  await payload.delete({ collection: 'tickets', where: {} })
-  await payload.delete({ collection: 'cycles', where: {} })
-  await payload.delete({ collection: 'labels', where: {} })
-  await payload.delete({ collection: 'label-groups', where: {} })
-  await payload.delete({ collection: 'members', where: {} })
-  await payload.delete({ collection: 'projects', where: {} })
-  await payload.delete({ collection: 'teams', where: {} })
+  await payload.delete({ collection: 'comments', where: {}, ...serviceArgs })
+  await payload.delete({ collection: 'tickets', where: {}, ...serviceArgs })
+  await payload.delete({ collection: 'cycles', where: {}, ...serviceArgs })
+  await payload.delete({ collection: 'labels', where: {}, ...serviceArgs })
+  await payload.delete({ collection: 'label-groups', where: {}, ...serviceArgs })
+  await payload.delete({ collection: 'members', where: {}, ...serviceArgs })
+  await payload.delete({ collection: 'projects', where: {}, ...serviceArgs })
+  await payload.delete({ collection: 'teams', where: {}, ...serviceArgs })
 
   console.log('Creating teams...')
   const teamMap = new Map<string, string>()
@@ -360,6 +366,7 @@ async function seed() {
     const created = await payload.create({
       collection: 'teams',
       data: team as any,
+      ...serviceArgs,
     })
     teamMap.set(team.name, created.id)
   }
@@ -370,6 +377,7 @@ async function seed() {
     const created = await payload.create({
       collection: 'projects',
       data: project as any,
+      ...serviceArgs,
     })
     projectMap.set(project.prefix, created.id)
   }
@@ -382,6 +390,7 @@ async function seed() {
     const created = await payload.create({
       collection: 'members',
       data: { name: member.name, email: member.email, team: teamId ?? null } as any,
+      ...serviceArgs,
     })
     memberIdsByName.set(member.name, created.id)
     const roster = membersByTeam.get(member.teamName) ?? []
@@ -395,6 +404,7 @@ async function seed() {
     const created = await payload.create({
       collection: 'label-groups',
       data: { name: group.name, order: group.order } as any,
+      ...serviceArgs,
     })
     labelGroupMap.set(group.name, created.id)
   }
@@ -408,6 +418,7 @@ async function seed() {
         color: label.color,
         group: label.groupName ? (labelGroupMap.get(label.groupName) ?? null) : null,
       } as any,
+      ...serviceArgs,
     })
     labelMap.set(label.name, created.id)
   }
@@ -449,6 +460,7 @@ async function seed() {
           .map((name) => labelMap.get(name))
           .filter((id): id is string => Boolean(id)),
       },
+      ...serviceArgs,
     })
 
     ticketMap.set(ticket.title, created.id)
@@ -471,6 +483,7 @@ async function seed() {
           data: {
             blockedBy: blockedByIDs,
           },
+          ...serviceArgs,
         })
       }
     }
@@ -498,6 +511,7 @@ async function seed() {
         body: withMentions(comment.body),
         author: memberIdsByName.get(comment.authorName) ?? null,
       } as any,
+      ...serviceArgs,
     })
 
     for (const reply of comment.replies ?? []) {
@@ -509,6 +523,7 @@ async function seed() {
           body: withMentions(reply.body),
           author: memberIdsByName.get(reply.authorName) ?? null,
         } as any,
+        ...serviceArgs,
       })
     }
 
@@ -517,6 +532,7 @@ async function seed() {
         collection: 'comments',
         id: root.id,
         data: { resolved: true } as any,
+        ...serviceArgs,
       })
     }
   }

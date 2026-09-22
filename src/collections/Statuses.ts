@@ -1,7 +1,7 @@
 import type { CollectionConfig } from 'payload'
 import { APIError } from 'payload'
 import { StatusType, STATUS_TYPE_OPTIONS } from '@/types/enums'
-import { collectionAccess } from '@/lib/access'
+import { statusesAccess } from '@/lib/access'
 import { slugifyKey } from '@/lib/workflow'
 
 export const Statuses: CollectionConfig = {
@@ -11,7 +11,7 @@ export const Statuses: CollectionConfig = {
     defaultColumns: ['name', 'key', 'type', 'project', 'order'],
     description: 'Workflow states a ticket can occupy, globally or per project',
   },
-  access: collectionAccess,
+  access: statusesAccess,
   hooks: {
     beforeValidate: [
       ({ data }) => {

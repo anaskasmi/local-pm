@@ -1,6 +1,6 @@
 import type { CollectionConfig, PayloadRequest } from 'payload'
 import { APIError } from 'payload'
-import { collectionAccess } from '@/lib/access'
+import { membersAccess } from '@/lib/access'
 
 export const Members: CollectionConfig = {
   slug: 'members',
@@ -9,7 +9,7 @@ export const Members: CollectionConfig = {
     defaultColumns: ['name', 'email', 'team', 'active'],
     description: 'People that tickets can be assigned to.',
   },
-  access: collectionAccess,
+  access: membersAccess,
   hooks: {
     beforeChange: [
       async ({ data, req, originalDoc }) => {
@@ -68,6 +68,32 @@ export const Members: CollectionConfig = {
         position: 'sidebar',
         description:
           'The login account this person signs in with. Set it and "My tickets" works for them.',
+      },
+    },
+    {
+      name: 'projects',
+      type: 'relationship',
+      relationTo: 'projects',
+      hasMany: true,
+      admin: {
+        position: 'sidebar',
+        description:
+          'Projects this person can open. Empty means no project access; only admins of the install see everything.',
+      },
+    },
+    {
+      name: 'projectRole',
+      type: 'select',
+      defaultValue: 'member',
+      options: [
+        { label: 'Admin', value: 'admin' },
+        { label: 'Member', value: 'member' },
+        { label: 'Viewer', value: 'viewer' },
+      ],
+      admin: {
+        position: 'sidebar',
+        description:
+          'What this person can do inside their projects. Viewer reads, member also writes, admin also deletes. Ignored outside the projects above.',
       },
     },
   ],

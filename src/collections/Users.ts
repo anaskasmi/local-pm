@@ -30,6 +30,28 @@ export const Users: CollectionConfig = {
       return (req.user as { role?: string } | undefined)?.role === 'admin'
     },
   },
+  hooks: {
+    beforeChange: [
+      /**
+       * "First account administers": the very first user document created on
+       * an install is promoted to admin, so the install can be bootstrapped
+       * without any pre-existing admin to grant it. Every later account
+       * defaults to 'member' — an unset role field must never read as admin.
+       */
+      async ({ operation, req, data }) => {
+        if (operation !== 'create') return
+        const existing = await req.payload.find({
+          collection: 'users',
+          limit: 1,
+          depth: 0,
+          overrideAccess: true,
+        })
+        if (existing.totalDocs === 0) {
+          data.role = 'admin'
+        }
+      },
+    ],
+  },
   fields: [
     {
       name: 'name',
@@ -40,7 +62,7 @@ export const Users: CollectionConfig = {
       name: 'role',
       type: 'select',
       required: true,
-      defaultValue: 'admin',
+      defaultValue: 'member',
       options: [
         { label: 'Admin', value: 'admin' },
         { label: 'Member', value: 'member' },
@@ -48,7 +70,7 @@ export const Users: CollectionConfig = {
       ],
       admin: {
         description:
-          'admin may delete records and manage accounts; member may read and write; agent is an automated caller and should hold an API key rather than a password. Defaults to admin so the first account created can administer the install.',
+          'admin may delete records and manage accounts; member may read and write; agent is an automated caller and should hold an API key rather than a password. The FIRST account created is promoted to admin automatically; every later account defaults to member.',
       },
     },
   ],

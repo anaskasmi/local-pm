@@ -6,6 +6,8 @@ import { cycleSettingsOf } from '@/lib/cycle-service'
 import { loadBurndown, snapshotOf } from '@/lib/burndown-service'
 import { cycleProgress } from '@/lib/cycles'
 import { CycleAutomation } from '@/types/enums'
+import { requireUser, authRequired, scopedLocalArgs } from '@/lib/rbac'
+import { SignedOutGate } from '@/components/ui/SignedOutGate'
 import type { Cycle, Project } from '@/payload-types'
 
 export const dynamic = 'force-dynamic'
@@ -16,9 +18,11 @@ interface CyclePageProps {
 
 export async function generateMetadata({ params }: CyclePageProps) {
   const { id } = await params
+  const user = authRequired() ? await requireUser() : null
+  if (authRequired() && !user) return { title: 'Cycle · local-pm' }
   try {
     const payload = await getPayload({ config })
-    const cycle = await payload.findByID({ collection: 'cycles', id, depth: 0 })
+    const cycle = await payload.findByID({ collection: 'cycles', id, depth: 0, ...scopedLocalArgs(user) })
     return { title: `${cycle.name} · local-pm` }
   } catch {
     return { title: 'Cycle · local-pm' }
@@ -28,9 +32,27 @@ export async function generateMetadata({ params }: CyclePageProps) {
 export default async function CyclePage({ params }: CyclePageProps) {
   const { id } = await params
   const payload = await getPayload({ config })
+  const user = authRequired() ? await requireUser() : null
+
+  // my-tickets pattern: no usable session → sign-in gate (the scoped cycle
+  // lookup would deny inside the RSC otherwise → crash).
+  if (authRequired() && !user) {
+    return <SignedOutGate title="Cycle" />
+  }
+
+  const authedArgs: Record<string, unknown> = {}
+  if (authRequired()) {
+    authedArgs.user = user ?? undefined
+    authedArgs.overrideAccess = false
+  }
 
   try {
-    const cycle = (await payload.findByID({ collection: 'cycles', id, depth: 1 })) as Cycle
+    const cycle = (await payload.findByID({
+      collection: 'cycles',
+      id,
+      depth: 1,
+      ...authedArgs,
+    })) as Cycle
     if (!cycle) notFound()
 
     const project =
@@ -40,6 +62,7 @@ export default async function CyclePage({ params }: CyclePageProps) {
             collection: 'projects',
             id: String(cycle.project),
             depth: 0,
+            ...authedArgs,
           })) as Project)
 
     const tickets = await payload.find({
@@ -47,6 +70,7 @@ export default async function CyclePage({ params }: CyclePageProps) {
       where: { cycle: { equals: id } },
       limit: 2000,
       depth: 1,
+      ...authedArgs,
     })
 
     const progress = cycleProgress(

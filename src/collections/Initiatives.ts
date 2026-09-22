@@ -1,6 +1,6 @@
 import type { CollectionConfig, PayloadRequest } from 'payload'
 import { APIError } from 'payload'
-import { collectionAccess } from '@/lib/access'
+import { initiativesAccess } from '@/lib/access'
 import {
   INITIATIVE_ICONS,
   INITIATIVE_STATUS_OPTIONS,
@@ -75,7 +75,7 @@ export const Initiatives: CollectionConfig = {
     defaultColumns: ['name', 'status', 'targetDate', 'createdAt'],
     description: 'A layer above projects that rolls several of them up into one objective',
   },
-  access: collectionAccess,
+  access: initiativesAccess,
   hooks: {
     beforeChange: [
       async ({ data, req }) => {

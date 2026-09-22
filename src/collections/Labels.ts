@@ -1,7 +1,7 @@
 import type { CollectionConfig } from 'payload'
 import { APIError } from 'payload'
 import { LabelColor, LABEL_COLOR_OPTIONS } from '@/types/enums'
-import { collectionAccess } from '@/lib/access'
+import { rootAccess } from '@/lib/access'
 import { slugifyKey } from '@/lib/workflow'
 
 export const Labels: CollectionConfig = {
@@ -11,7 +11,7 @@ export const Labels: CollectionConfig = {
     defaultColumns: ['name', 'key', 'color', 'group'],
     description: 'Shared labels that any ticket in the workspace can carry',
   },
-  access: collectionAccess,
+  access: rootAccess,
   hooks: {
     beforeValidate: [
       ({ data }) => {

@@ -10,6 +10,14 @@ import {
 
 const BASE_URL = process.env.LOCAL_PM_URL || 'http://localhost:3010';
 
+/**
+ * Optional API key of the acting account (Users API key). When set, every
+ * call is authenticated and the server scopes list/get responses to the
+ * linked member's projects (install-admin accounts see everything). When
+ * unset the server's LOCAL_PM_REQUIRE_AUTH setting governs access.
+ */
+const API_KEY = process.env.LOCAL_PM_API_KEY || '';
+
 const STATUS_MAP: Record<string, string> = {
   planned: 'PLANNED',
   active: 'ACTIVE',
@@ -553,11 +561,15 @@ async function apiRequest(
   body?: unknown
 ): Promise<unknown> {
   const url = `${BASE_URL}/api${endpoint}`;
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+  };
+  if (API_KEY) {
+    headers.Authorization = `users API-Key ${API_KEY}`;
+  }
   const options: RequestInit = {
     method,
-    headers: {
-      'Content-Type': 'application/json',
-    },
+    headers,
   };
 
   if (body) {
@@ -572,6 +584,93 @@ async function apiRequest(
   }
 
   return response.json();
+}
+
+/**
+ * Workspace scoping (task 41): resolve the acting account's visible projects.
+ * Returns null when the actor sees everything (no API key, auth off, or an
+ * install-admin account); otherwise the concrete project ID list. The lists
+ * cache briefly so tool bursts do not re-fetch membership per call.
+ */
+let membershipCache: { at: number; all: boolean; ids: string[] } | null = null;
+
+async function visibleProjectIds(): Promise<{ all: boolean; ids: string[] } | null> {
+  if (!API_KEY) return null;
+  if (membershipCache && Date.now() - membershipCache.at < 15000) {
+    return { all: membershipCache.all, ids: membershipCache.ids };
+  }
+
+  try {
+    const me = (await apiRequest('/users/me')) as { user?: { id?: string; role?: string } };
+    const user = me?.user;
+    if (!user?.id) return { all: false, ids: [] };
+    if (user.role === 'admin') {
+      membershipCache = { at: Date.now(), all: true, ids: [] };
+      return { all: true, ids: [] };
+    }
+
+    const query = new URLSearchParams({ limit: '1', depth: '0' });
+    query.set('where[user][equals]', String(user.id));
+    const found = (await apiRequest(`/members?${query}`)) as {
+      docs?: Array<{ projects?: Array<string | { id?: string }>[] | string[] | null }>;
+    };
+    const member = found.docs?.[0];
+    const refs = (member?.projects ?? []) as Array<string | { id?: string }>;
+    const ids = refs
+      .map((ref) => (typeof ref === 'string' ? ref : ref?.id))
+      .filter((id): id is string => Boolean(id));
+    membershipCache = { at: Date.now(), all: false, ids };
+    return { all: false, ids };
+  } catch {
+    // Fail closed: an unresolvable actor sees nothing rather than everything.
+    membershipCache = { at: Date.now(), all: false, ids: [] };
+    return { all: false, ids: [] };
+  }
+}
+
+/** Where-fragment limiting a project field to the actor's grants. */
+async function projectScopeParam(field = 'project'): Promise<string> {
+  const scope = await visibleProjectIds();
+  if (!scope || scope.all) return '';
+  if (scope.ids.length === 0) {
+    // No grants: constrain to an impossible ID so the list comes back empty
+    // instead of leaking rows the actor cannot open.
+    return `&where[${field}][equals]=__no_access__`;
+  }
+  return `&where[${field}][in]=${scope.ids.join(',')}`;
+}
+
+/** Per-document check for get_* tools: may the actor open this project's content? */
+async function mayOpenProject(projectId: string | null | undefined): Promise<boolean> {
+  if (!projectId) return false;
+  const scope = await visibleProjectIds();
+  if (!scope || scope.all) return true;
+  return scope.ids.includes(String(projectId));
+}
+
+/**
+ * Comments and activity hang off a ticket; the ticket's project decides.
+ * Resolves the ticket then applies the same per-document check.
+ */
+async function mayOpenTicketThroughProject(ticketId: string | null | undefined): Promise<boolean> {
+  if (!ticketId) return false;
+  const scope = await visibleProjectIds();
+  if (!scope || scope.all) return true;
+  try {
+    const ticket = (await apiRequest(`/tickets/${ticketId}?depth=0`)) as Record<string, unknown>;
+    return mayOpenProject(projectIdOf(ticket.project));
+  } catch {
+    return false;
+  }
+}
+
+function projectIdOf(value: unknown): string | null {
+  if (typeof value === 'string') return value;
+  if (value && typeof value === 'object' && 'id' in (value as Record<string, unknown>)) {
+    const id = (value as { id: unknown }).id;
+    if (typeof id === 'string' || typeof id === 'number') return String(id);
+  }
+  return null;
 }
 
 const tools: Tool[] = [
@@ -1871,6 +1970,7 @@ async function handleToolCall(
       if (args.status) {
         query += `&where[status][equals]=${toPayloadValue(args.status as string)}`;
       }
+      query += await projectScopeParam('id');
       const response = await apiRequest(`/projects${query}`) as {
         docs: Array<Record<string, unknown>>;
         totalDocs: number;
@@ -1904,7 +2004,11 @@ async function handleToolCall(
       });
     }
     case 'get_project': {
-      return apiRequest(`/projects/${args.id}?depth=1`);
+      const project = (await apiRequest(`/projects/${args.id}?depth=1`)) as Record<string, unknown>;
+      if (!(await mayOpenProject(projectIdOf(project.id)))) {
+        throw new Error(`Project ${args.id} was not found in your visible projects.`);
+      }
+      return project;
     }
     case 'create_project': {
       return apiRequest('/projects', 'POST', {
@@ -2334,6 +2438,7 @@ async function handleToolCall(
       if (args.priority) {
         query += `&where[priority][equals]=${toPayloadValue(args.priority as string)}`;
       }
+      query += await projectScopeParam('project');
       const response = await apiRequest(`/tickets${query}`) as {
         docs: Array<Record<string, unknown>>;
         totalDocs: number;
@@ -2359,7 +2464,11 @@ async function handleToolCall(
       });
     }
     case 'get_ticket': {
-      return apiRequest(`/tickets/${args.id}?depth=1`);
+      const ticket = (await apiRequest(`/tickets/${args.id}?depth=1`)) as Record<string, unknown>;
+      if (!(await mayOpenProject(projectIdOf(ticket.project)))) {
+        throw new Error(`Ticket ${args.id} was not found in your visible projects.`);
+      }
+      return ticket;
     }
     case 'get_epic': {
       const epic = (await apiRequest(`/tickets/${args.id}?depth=1`)) as Record<string, unknown>;
@@ -2452,6 +2561,7 @@ async function handleToolCall(
       if (args.assigneeId) {
         query += `&where[assignee][equals]=${args.assigneeId}`;
       }
+      query += await projectScopeParam('project');
       const response = await apiRequest(`/tickets${query}`) as { docs: Array<Record<string, unknown>> };
       const tickets = response.docs || [];
 
@@ -2547,6 +2657,10 @@ async function handleToolCall(
       const limit = (args.limit as number) || 50;
       const page = (args.page as number) || 1;
 
+      if (!(await mayOpenTicketThroughProject(args.ticketId as string))) {
+        throw new Error(`Ticket ${args.ticketId} was not found in your visible projects.`);
+      }
+
       let query = `?limit=${limit}&page=${page}&depth=1&sort=createdAt`;
       query += `&where[ticket][equals]=${args.ticketId}`;
       if (args.field) {
@@ -2589,6 +2703,10 @@ async function handleToolCall(
       const limit = (args.limit as number) || 50;
       const page = (args.page as number) || 1;
 
+      if (!(await mayOpenTicketThroughProject(args.ticketId as string))) {
+        throw new Error(`Ticket ${args.ticketId} was not found in your visible projects.`);
+      }
+
       let query = `?limit=${limit}&page=${page}&depth=1&sort=createdAt`;
       query += `&where[ticket][equals]=${args.ticketId}`;
       if (args.parentId) {
@@ -2629,6 +2747,9 @@ async function handleToolCall(
       });
     }
     case 'add_comment': {
+      if (!(await mayOpenTicketThroughProject(args.ticketId as string))) {
+        throw new Error(`Ticket ${args.ticketId} was not found in your visible projects.`);
+      }
       return apiRequest('/comments', 'POST', {
         ticket: args.ticketId,
         body: args.body,

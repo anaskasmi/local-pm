@@ -19,9 +19,11 @@ export interface SignedInUser {
 export function MyTickets({
   member,
   signedInAs,
+  canReadTickets = true,
 }: {
   member: Member | null
   signedInAs: SignedInUser | null
+  canReadTickets?: boolean
 }) {
   const router = useRouter()
   const { toast } = useToast()
@@ -74,6 +76,16 @@ export function MyTickets({
             kind="no-data"
             title="Sign in to see your tickets"
             description="This view shows the tickets assigned to you, so it needs to know who you are. Sign in and it fills up."
+          >
+            <LinkButton variant="primary" size="lg" icon={LogIn} href="/admin">
+              Sign in
+            </LinkButton>
+          </EmptyState>
+        ) : !canReadTickets ? (
+          <EmptyState
+            kind="no-data"
+            title="Sign in to see your tickets"
+            description="This install requires an account. Sign in and the tickets assigned to you show up here."
           >
             <LinkButton variant="primary" size="lg" icon={LogIn} href="/admin">
               Sign in

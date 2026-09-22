@@ -1,6 +1,6 @@
 import type { CollectionConfig } from 'payload'
 import { APIError } from 'payload'
-import { collectionAccess } from '@/lib/access'
+import { rootAccess } from '@/lib/access'
 import { slugifyKey } from '@/lib/workflow'
 
 export const LabelGroups: CollectionConfig = {
@@ -10,7 +10,7 @@ export const LabelGroups: CollectionConfig = {
     defaultColumns: ['name', 'key', 'order'],
     description: 'Optional clusters that labels can belong to, such as Area or Kind',
   },
-  access: collectionAccess,
+  access: rootAccess,
   hooks: {
     beforeValidate: [
       ({ data }) => {

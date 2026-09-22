@@ -1,6 +1,6 @@
 import type { CollectionConfig, PayloadRequest } from 'payload'
 import { APIError } from 'payload'
-import { collectionAccess } from '@/lib/access'
+import { commentsAccess } from '@/lib/access'
 import { extractMentionIds } from '@/lib/mentions'
 import { plainSummary } from '@/lib/markdown'
 import type { Activity } from '@/payload-types'
@@ -14,7 +14,7 @@ export const Comments: CollectionConfig = {
     defaultColumns: ['body', 'ticket', 'author', 'resolved'],
     description: 'Discussion on tickets. A reply points at the comment that opened the thread.',
   },
-  access: collectionAccess,
+  access: commentsAccess,
   hooks: {
     beforeChange: [
       async ({ data, req, operation, originalDoc }) => {

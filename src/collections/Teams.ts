@@ -1,5 +1,5 @@
 import type { CollectionConfig } from 'payload'
-import { collectionAccess } from '@/lib/access'
+import { rootAccess } from '@/lib/access'
 
 export const Teams: CollectionConfig = {
   slug: 'teams',
@@ -8,7 +8,7 @@ export const Teams: CollectionConfig = {
     defaultColumns: ['name', 'createdAt'],
     description: 'Teams group related work within a project',
   },
-  access: collectionAccess,
+  access: rootAccess,
   fields: [
     {
       name: 'name',
