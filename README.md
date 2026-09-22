@@ -172,6 +172,11 @@ The MCP server exposes 31 tools for complete project management:
 | `update_comment` | Edit a comment, or resolve/reopen a thread |
 | `delete_comment` | Delete a comment and any replies under it |
 
+### Status Tools
+| Tool | Description |
+|------|-------------|
+| `list_statuses` | List the workflow statuses a ticket can occupy, in board column order |
+
 ### Label Tools
 | Tool | Description |
 |------|-------------|
