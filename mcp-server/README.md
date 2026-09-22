@@ -44,6 +44,19 @@ This MCP server provides AI models with full access to Local PM functionality:
 - `move_ticket` - Move ticket between statuses (todo, in_progress, done)
 - `delete_ticket` - Delete a ticket
 
+### Triage
+- `list_triage` - The queue of incoming work waiting to be reviewed, plus the statuses it can be accepted into
+- `resolve_triage` - Accept, mark as duplicate, decline or snooze one triage item
+
+Triage is off by default. Turn it on for a project with `update_project` and
+`triage: { enabled: true }`, then file work into the queue with
+`create_ticket` and `triage: true`.
+
+Items in triage are deliberately absent from `list_tickets` and `get_board`,
+so `list_triage` is the only way to see them. Nothing is deleted: declining and
+marking as duplicate both move the ticket to a cancelled status and keep its
+history.
+
 ### Epics
 - `get_epic` - Get an epic with the tickets that roll up into it and its rollup progress
 

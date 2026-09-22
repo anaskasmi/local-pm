@@ -7,6 +7,7 @@ import {
   ArrowLeft,
   Diamond,
   FileText,
+  Inbox,
   LayoutDashboard,
   ListChecks,
   Pencil,
@@ -37,6 +38,7 @@ import { RichTextDisplay } from '@/components/ui/RichTextEditor'
 import { TicketsTable } from '@/components/tickets/TicketsTable'
 import { CycleSettings } from '@/components/cycles/CycleSettings'
 import { EstimateSettings } from '@/components/projects/EstimateSettings'
+import { TriageSettings } from '@/components/projects/TriageSettings'
 import type { Initiative, Project } from '@/payload-types'
 
 export interface ProjectStats {
@@ -46,7 +48,7 @@ export interface ProjectStats {
   done: number
 }
 
-const TAB_IDS = ['overview', 'tickets', 'cycles', 'estimates'] as const
+const TAB_IDS = ['overview', 'tickets', 'cycles', 'estimates', 'triage'] as const
 type TabId = (typeof TAB_IDS)[number]
 
 export function ProjectDetail({
@@ -196,6 +198,7 @@ export function ProjectDetail({
             { id: 'tickets', label: 'Tickets', icon: ListChecks, count: stats.total },
             { id: 'cycles', label: 'Cycles', icon: Repeat },
             { id: 'estimates', label: 'Estimates', icon: Diamond },
+            { id: 'triage', label: 'Triage', icon: Inbox },
           ]}
         />
       </header>
@@ -373,6 +376,10 @@ export function ProjectDetail({
 
         <TabPanel id="estimates" idPrefix="project" active={tab === 'estimates'}>
           <EstimateSettings project={project} />
+        </TabPanel>
+
+        <TabPanel id="triage" idPrefix="project" active={tab === 'triage'}>
+          <TriageSettings project={project} />
         </TabPanel>
       </div>
 

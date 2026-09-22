@@ -5,6 +5,10 @@ import { appendTicketSearch } from '@/lib/ticket-search'
 
 export type EntityCollection = 'projects' | 'teams' | 'tickets' | 'members' | 'cycles' | 'labels'
 
+export type WhereValue = string | null | undefined | { not_in: string[] }
+
+export type EntityWhere = Record<string, WhereValue>
+
 export interface EntityQueryOptions {
   collection: EntityCollection
 
@@ -12,7 +16,7 @@ export interface EntityQueryOptions {
 
   sort: string
 
-  where?: Record<string, string | null | undefined>
+  where?: EntityWhere
   pageSize?: number
   depth?: number
 
@@ -62,10 +66,12 @@ export function useEntityQuery<T extends { id: string }>(
       const trimmed = search.trim()
       if (collection === 'tickets') appendTicketSearch(params, trimmed)
       else if (trimmed) params.set(`where[${searchField}][like]`, trimmed)
-      for (const [field, value] of Object.entries(
-        (JSON.parse(whereKey) ?? {}) as Record<string, string | null | undefined>,
-      )) {
-        if (value) params.set(`where[${field}][equals]`, value)
+      for (const [field, value] of Object.entries((JSON.parse(whereKey) ?? {}) as EntityWhere)) {
+        if (typeof value === 'string') {
+          if (value) params.set(`where[${field}][equals]`, value)
+        } else if (value && value.not_in.length > 0) {
+          params.set(`where[${field}][not_in]`, value.not_in.join(','))
+        }
       }
       return `/api/${collection}?${params}`
     },

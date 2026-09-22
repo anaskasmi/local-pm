@@ -50,6 +50,8 @@ export const TRACKED_FIELDS = [
   'estimate',
   'startDate',
   'dueDate',
+  'snoozedUntil',
+  'duplicateOf',
   'description',
   'labels',
   'blockedBy',
@@ -70,6 +72,8 @@ export const FIELD_LABELS: Record<TrackedField, string> = {
   estimate: 'Estimate',
   startDate: 'Start date',
   dueDate: 'Due date',
+  snoozedUntil: 'Snoozed until',
+  duplicateOf: 'Duplicate of',
   description: 'Description',
   labels: 'Labels',
   blockedBy: 'Blocked by',
@@ -79,7 +83,7 @@ export const FIELD_LABELS: Record<TrackedField, string> = {
 
 const OPAQUE_FIELDS = new Set<TrackedField>(['description'])
 
-const DAY_FIELDS = new Set<TrackedField>(['startDate', 'dueDate'])
+const DAY_FIELDS = new Set<TrackedField>(['startDate', 'dueDate', 'snoozedUntil'])
 
 const CHOICE_LABELS: Partial<Record<TrackedField, Record<string, string>>> = {
   priority: Object.fromEntries(TICKET_PRIORITY_OPTIONS.map((o) => [o.value, o.label])),

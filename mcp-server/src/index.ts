@@ -89,9 +89,38 @@ async function resolveStatusId(value: string | undefined, projectId?: string): P
   return match.id;
 }
 
+const TRIAGE_TYPE = 'TRIAGE';
+
+function isTriageStatus(doc: StatusDoc): boolean {
+  return doc.type === TRIAGE_TYPE;
+}
+
 async function defaultStatusId(projectId?: string): Promise<string | undefined> {
   const scope = statusesForProject(await loadStatuses(), projectId);
-  return scope[0]?.id;
+  return scope.find((doc) => !isTriageStatus(doc))?.id;
+}
+
+async function triageStatusId(projectId?: string): Promise<string | undefined> {
+  const scope = statusesForProject(await loadStatuses(), projectId);
+  return scope.find(isTriageStatus)?.id;
+}
+
+async function createStatusId(args: Record<string, unknown>): Promise<string | undefined> {
+  const project = (args.project ?? args.projectId) as string | undefined;
+
+  if (args.triage === true) {
+    const triage = await triageStatusId(project);
+    if (!triage) {
+      throw new Error(
+        'Triage is not on for this project. Turn it on in project settings, or set update_project triage.enabled, before filing into the queue.',
+      );
+    }
+    return triage;
+  }
+
+  return (
+    (await resolveStatusId(args.status as string, project)) ?? (await defaultStatusId(project))
+  );
 }
 
 interface LabelDoc {
@@ -721,6 +750,17 @@ const tools: Tool[] = [
             },
           },
         },
+        triage: {
+          type: 'object',
+          description:
+            'Triage settings. Turning triage on adds a Triage status to this project and a queue that incoming work waits in, out of the board and the ticket list, until someone resolves it.',
+          properties: {
+            enabled: {
+              type: 'boolean',
+              description: 'Whether incoming work waits in a triage queue before reaching the backlog',
+            },
+          },
+        },
       },
       required: ['id'],
     },
@@ -1190,6 +1230,61 @@ const tools: Tool[] = [
     },
   },
   {
+    name: 'list_triage',
+    description:
+      'The triage queue: incoming work waiting to be accepted, declined, merged or snoozed before it reaches the backlog. Triage items are deliberately absent from list_tickets and get_board, so this is the only way to see them. Returns the workflow statuses an item can be accepted into.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        projectId: {
+          type: 'string',
+          description: 'Only show the queue for this project. Omit for every project that has triage on.',
+        },
+        snoozed: {
+          type: 'boolean',
+          description: 'Return the snoozed items instead of the pending ones (default: false)',
+        },
+      },
+    },
+  },
+  {
+    name: 'resolve_triage',
+    description:
+      'Resolve one triage item. accept moves it into the workflow, duplicate links it to an existing ticket and cancels it, decline cancels it, and snooze hides it until a date or until someone touches it. Nothing is deleted, so the record and its history survive every path.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        id: {
+          type: 'string',
+          description: 'The ticket ID sitting in triage',
+        },
+        resolution: {
+          type: 'string',
+          description: 'What to do with it',
+          enum: ['accept', 'duplicate', 'decline', 'snooze'],
+        },
+        status: {
+          type: 'string',
+          description:
+            'accept only. The status to accept into, as an id or key. Defaults to the first unstarted status in the project workflow.',
+        },
+        duplicateOf: {
+          type: 'string',
+          description: 'duplicate only. The ID of the canonical ticket, which has to be in the same project.',
+        },
+        snoozedUntil: {
+          type: 'string',
+          description: 'snooze only. The date to wake it on, ISO (YYYY-MM-DD). Must be in the future.',
+        },
+        comment: {
+          type: 'string',
+          description: 'Optional note explaining the decision, posted as a comment on the ticket.',
+        },
+      },
+      required: ['id', 'resolution'],
+    },
+  },
+  {
     name: 'close_cycle',
     description: 'Close a cycle now and roll its unfinished tickets on according to the project rollover setting (next cycle, backlog, or leave them).',
     inputSchema: {
@@ -1472,6 +1567,11 @@ const tools: Tool[] = [
           description: 'Ticket priority',
           enum: ['no_priority', 'urgent', 'high', 'medium', 'low'],
           default: 'no_priority',
+        },
+        triage: {
+          type: 'boolean',
+          description:
+            'File this into the project triage queue instead of the workflow, so a human accepts, declines or merges it before it reaches the backlog. Requires triage to be on for the project. Overrides status.',
         },
         startDate: {
           type: 'string',
@@ -1941,6 +2041,11 @@ async function handleToolCall(
             'FIBONACCI',
         };
       }
+      if (args.triage !== undefined) {
+        const requested = args.triage as { enabled?: boolean };
+        updates.triage = { enabled: requested.enabled === true };
+        statusCache = null;
+      }
       return apiRequest(`/projects/${id}`, 'PATCH', updates);
     }
     case 'delete_project': {
@@ -2231,6 +2336,31 @@ async function handleToolCall(
       const window = args.window ? `&window=${args.window}` : '';
       return apiRequest(`/cycles/velocity?project=${args.projectId}${window}`);
     }
+    case 'list_triage': {
+      const params = new URLSearchParams();
+      if (args.projectId) params.set('project', String(args.projectId));
+      const result = (await apiRequest(`/tickets/triage?${params}`)) as {
+        enabled?: boolean;
+        pending?: unknown[];
+        snoozed?: unknown[];
+        workflow?: unknown[];
+      };
+      return {
+        enabled: result.enabled ?? false,
+        items: args.snoozed ? (result.snoozed ?? []) : (result.pending ?? []),
+        acceptInto: result.workflow ?? [],
+      };
+    }
+    case 'resolve_triage': {
+      const body: Record<string, unknown> = { resolution: args.resolution };
+      if (args.resolution === 'accept' && args.status) {
+        body.status = await resolveStatusId(args.status as string);
+      }
+      if (args.duplicateOf !== undefined) body.duplicateOf = args.duplicateOf;
+      if (args.snoozedUntil !== undefined) body.snoozedUntil = args.snoozedUntil;
+      if (args.comment !== undefined) body.comment = args.comment;
+      return apiRequest(`/tickets/${args.id}/triage`, 'POST', body);
+    }
     case 'reconcile_cycles': {
       return apiRequest('/cycles/reconcile', 'POST', args.projectId ? { project: args.projectId } : {});
     }
@@ -2397,9 +2527,7 @@ async function handleToolCall(
         assignee: args.assignee || null,
         cycle: args.cycle || null,
         estimate: resolveEstimate(args.estimate),
-        status:
-          (await resolveStatusId(args.status as string, args.projectId as string | undefined)) ||
-          (await defaultStatusId(args.projectId as string | undefined)),
+        status: await createStatusId(args),
         priority: toPayloadValue(args.priority as string) || 'NO_PRIORITY',
         startDate: args.startDate || null,
         dueDate: args.dueDate || null,

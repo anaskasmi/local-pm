@@ -5,6 +5,7 @@ import {
   Circle,
   CircleDashed,
   CircleDot,
+  Inbox,
   PauseCircle,
   Timer,
   XCircle,
@@ -53,6 +54,7 @@ export const TONE_TEXT: Record<Tone, string> = {
 }
 
 export const STATUS_TYPE_META: Record<StatusType, { icon: StateIcon; tone: Tone }> = {
+  [StatusType.TRIAGE]: { icon: Inbox, tone: 'warning' },
   [StatusType.BACKLOG]: { icon: CircleDashed, tone: 'neutral' },
   [StatusType.UNSTARTED]: { icon: Circle, tone: 'neutral' },
   [StatusType.STARTED]: { icon: Timer, tone: 'info' },
@@ -87,9 +89,11 @@ export function statusMeta(status: Status | string | null | undefined): StateMet
   return { value: status.key, label: status.name, icon, tone }
 }
 
+export const CLOSED_STATUS_TYPES: StatusType[] = [StatusType.COMPLETED, StatusType.CANCELLED]
+
 export function isClosedStatus(status: Status | string | null | undefined): boolean {
   const type = statusTypeOf(status)
-  return type ? !isOpenStatusType(type) : false
+  return type ? CLOSED_STATUS_TYPES.includes(type as StatusType) : false
 }
 
 export function statusOptions(statuses: Status[]): StateSelectOption[] {

@@ -1,10 +1,12 @@
 import type { CollectionConfig, PayloadRequest } from 'payload'
 import { APIError } from 'payload'
 import { TicketPriority, TICKET_PRIORITY_OPTIONS } from '@/types/enums'
-import { collectionAccess } from '@/lib/access'
+import { collectionAccess, requireAuthEnabled } from '@/lib/access'
 import { diffTicket, idOf } from '@/lib/activity'
 import { TICKET_DATES, pendingDateOrderError } from '@/lib/dates'
 import { MAX_ESTIMATE, normalizeEstimate } from '@/lib/estimates'
+import { changedFields, isTriageResolution, wakesSnooze } from '@/lib/triage'
+import { TriageError, loadTriageQueue, resolveTriageTicket } from '@/lib/triage-service'
 
 export const Tickets: CollectionConfig = {
   slug: 'tickets',
@@ -14,6 +16,71 @@ export const Tickets: CollectionConfig = {
     description: 'Individual work items within projects',
   },
   access: collectionAccess,
+  endpoints: [
+    {
+      path: '/triage',
+      method: 'get',
+      handler: async (req) => {
+        if (triageDenied(req)) return triageJson({ error: 'Not authorised' }, 403)
+
+        const project = typeof req.query?.project === 'string' ? req.query.project : null
+        const queue = await loadTriageQueue(req.payload, project)
+
+        return triageJson({
+          enabled: queue.statuses.length > 0,
+          pending: queue.pending,
+          snoozed: queue.snoozed,
+          workflow: queue.workflow.map((status) => ({
+            id: String(status.id),
+            name: status.name,
+            key: status.key,
+            type: status.type,
+          })),
+        })
+      },
+    },
+    {
+      path: '/:id/triage',
+      method: 'post',
+      handler: async (req) => {
+        if (triageDenied(req)) return triageJson({ error: 'Not authorised' }, 403)
+
+        const id = req.routeParams?.id
+        if (typeof id !== 'string') return triageJson({ error: 'A ticket id is required.' }, 400)
+
+        const body = await triageBody(req)
+        if (!isTriageResolution(body.resolution)) {
+          return triageJson(
+            { error: 'Choose one of accept, duplicate, decline or snooze.' },
+            400,
+          )
+        }
+
+        try {
+          const outcome = await resolveTriageTicket(req, id, {
+            resolution: body.resolution,
+            statusId: typeof body.status === 'string' ? body.status : null,
+            duplicateOf: typeof body.duplicateOf === 'string' ? body.duplicateOf : null,
+            snoozedUntil: typeof body.snoozedUntil === 'string' ? body.snoozedUntil : null,
+            comment: typeof body.comment === 'string' ? body.comment : null,
+          })
+
+          return triageJson({
+            resolution: outcome.resolution,
+            ticket: outcome.ticket,
+            status: outcome.status
+              ? { id: String(outcome.status.id), name: outcome.status.name }
+              : null,
+          })
+        } catch (error) {
+          if (error instanceof TriageError) {
+            return triageJson({ error: error.message }, error.status)
+          }
+          throw error
+        }
+      },
+    },
+  ],
   hooks: {
     beforeChange: [
       async ({ data, req, operation, originalDoc }) => {
@@ -36,6 +103,18 @@ export const Tickets: CollectionConfig = {
 
         const dateError = pendingDateOrderError(TICKET_DATES, data, originalDoc)
         if (dateError) throw new APIError(dateError, 400, null, true)
+
+        if (
+          operation === 'update' &&
+          originalDoc?.snoozedUntil &&
+          wakesSnooze(changedFields(data, originalDoc))
+        ) {
+          data.snoozedUntil = null
+        }
+
+        if (data?.duplicateOf !== undefined) {
+          assertNotSelfDuplicate(data.duplicateOf, originalDoc?.id ?? null)
+        }
 
         return data
       },
@@ -184,6 +263,27 @@ export const Tickets: CollectionConfig = {
       },
     },
     {
+      name: 'duplicateOf',
+      type: 'relationship',
+      relationTo: 'tickets',
+      index: true,
+      admin: {
+        description:
+          'The canonical ticket this one duplicates. Set when a triage item is merged into existing work.',
+      },
+    },
+    {
+      name: 'snoozedUntil',
+      type: 'date',
+      index: true,
+      admin: {
+        description: 'Hide this from the triage queue until this date, or until someone touches it',
+        date: {
+          pickerAppearance: 'dayOnly',
+        },
+      },
+    },
+    {
       name: 'isEpic',
       type: 'checkbox',
       defaultValue: false,
@@ -272,6 +372,14 @@ async function detachChildrenOf(req: PayloadRequest, id: string | number): Promi
       depth: 0,
       overrideAccess: true,
     })
+  }
+}
+
+function assertNotSelfDuplicate(duplicateOf: unknown, selfId: string | number | null): void {
+  if (selfId === null) return
+  const target = idOf(duplicateOf)
+  if (target && target === String(selfId)) {
+    throw new APIError('A ticket cannot be a duplicate of itself.', 400, null, true)
   }
 }
 
@@ -620,4 +728,21 @@ async function generateTicketIdWithRetry(req: PayloadRequest, projectId: string)
   throw new Error(
     'Could not allocate a unique ticket ID after 8 attempts — check the project ticketCounter.',
   )
+}
+
+function triageDenied(req: PayloadRequest): boolean {
+  return requireAuthEnabled() && !req.user
+}
+
+function triageJson(body: unknown, status = 200): Response {
+  return Response.json(body, { status })
+}
+
+async function triageBody(req: PayloadRequest): Promise<Record<string, unknown>> {
+  try {
+    const parsed = await req.json?.()
+    return parsed && typeof parsed === 'object' ? (parsed as Record<string, unknown>) : {}
+  } catch {
+    return {}
+  }
 }

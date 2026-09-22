@@ -1,10 +1,12 @@
 'use client'
 
 import {
+  AlarmClock,
   CalendarDays,
   CalendarRange,
   CheckCircle2,
   CircleDot,
+  Copy,
   CornerDownRight,
   Diamond,
   FileText,
@@ -43,6 +45,8 @@ const FIELD_ICONS: Record<TrackedField, IconType> = {
   estimate: Diamond,
   startDate: CalendarRange,
   dueDate: CalendarDays,
+  snoozedUntil: AlarmClock,
+  duplicateOf: Copy,
   description: FileText,
   labels: Tag,
   blockedBy: Unlink,

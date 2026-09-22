@@ -1,6 +1,7 @@
 import type { Payload } from 'payload'
 import type { Status, Ticket } from '@/payload-types'
 import { LEGACY_STATUS_KEYS } from '@/types/enums'
+import { splitWorkflow } from '@/lib/triage'
 
 export function slugifyKey(value: string): string {
   return value
@@ -19,7 +20,10 @@ export function sortStatuses(statuses: Status[]): Status[] {
   return [...statuses].sort((a, b) => (a.order ?? 0) - (b.order ?? 0) || a.name.localeCompare(b.name))
 }
 
-export async function resolveWorkflow(payload: Payload, projectId?: string | null): Promise<Status[]> {
+export async function resolveAllStatuses(
+  payload: Payload,
+  projectId?: string | null,
+): Promise<Status[]> {
   const global = await payload.find({
     collection: 'statuses',
     limit: 100,
@@ -37,6 +41,17 @@ export async function resolveWorkflow(payload: Payload, projectId?: string | nul
   })
 
   return sortStatuses([...(global.docs as Status[]), ...(scoped.docs as Status[])])
+}
+
+export async function resolveWorkflow(payload: Payload, projectId?: string | null): Promise<Status[]> {
+  return splitWorkflow(await resolveAllStatuses(payload, projectId)).workflow
+}
+
+export async function resolveTriageStatuses(
+  payload: Payload,
+  projectId?: string | null,
+): Promise<Status[]> {
+  return splitWorkflow(await resolveAllStatuses(payload, projectId)).triage
 }
 
 export function statusIdOf(ticket: Pick<Ticket, 'status'>): string | null {

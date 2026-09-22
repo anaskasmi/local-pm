@@ -1,7 +1,8 @@
 import { getPayload } from 'payload'
 import config from '@payload-config'
 import { TicketForm } from '@/components/tickets/TicketForm'
-import { resolveWorkflow } from '@/lib/workflow'
+import { splitWorkflow } from '@/lib/triage'
+import { resolveAllStatuses } from '@/lib/workflow'
 import type { Cycle, Project, Team, Member } from '@/payload-types'
 
 export const dynamic = 'force-dynamic'
@@ -22,11 +23,12 @@ export default async function NewTicketPage({ searchParams }: NewTicketPageProps
   const params = await searchParams
   const projectId = params.project || null
   const payload = await getPayload({ config })
-  const workflow = await resolveWorkflow(payload, projectId)
+  const workflow = await resolveAllStatuses(payload, projectId)
   const requested = params.status ?? ''
+  const selectable = splitWorkflow(workflow)
   const status =
     workflow.find((entry) => entry.id === requested || entry.key === requested)?.id ??
-    workflow[0]?.id ??
+    selectable.workflow[0]?.id ??
     ''
 
   let project: Project | null = null

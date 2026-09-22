@@ -21,6 +21,7 @@ import { PriorityIndicator, TicketStatusBadge } from '@/components/ui/StateIndic
 import { TicketKey } from '@/components/ui/EntityMark'
 import { Table, Td, Th, Tr } from '@/components/ui/Table'
 import type { Member, Project, Team, Ticket } from '@/payload-types'
+import { splitWorkflow } from '@/lib/triage'
 import { useWorkflow } from '@/components/shell/WorkflowProvider'
 
 type SortKey = 'sortOrder' | 'title' | '-title' | '-createdAt' | 'createdAt' | 'dueDate'
@@ -54,9 +55,17 @@ export function TicketsTable({
   relationColumn,
 }: TicketsTableProps) {
   const { statuses: allStatuses, statusesForProject } = useWorkflow()
-  const statuses = useMemo(
+  const scoped = useMemo(
     () => (where.project ? statusesForProject(where.project) : allStatuses),
     [where.project, statusesForProject, allStatuses],
+  )
+  const { triage: triageStatuses, workflow: statuses } = useMemo(
+    () => splitWorkflow(scoped),
+    [scoped],
+  )
+  const triageIds = useMemo(
+    () => triageStatuses.map((entry) => entry.id),
+    [triageStatuses],
   )
   const router = useRouter()
 
@@ -69,7 +78,10 @@ export function TicketsTable({
       collection: 'tickets',
       searchField: 'title',
       sort,
-      where: { ...where, status: status || undefined },
+      where: {
+        ...where,
+        status: status || (triageIds.length > 0 ? { not_in: triageIds } : undefined),
+      },
       depth: 1,
       pageSize: 25,
     })

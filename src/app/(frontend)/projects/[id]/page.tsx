@@ -36,12 +36,13 @@ export default async function ProjectPage({ params, searchParams }: ProjectPageP
     const idsOfType = (...types: StatusType[]) =>
       workflow.filter((entry) => types.includes(entry.type as StatusType)).map((entry) => entry.id)
 
+    const workflowIds = workflow.map((entry) => entry.id)
     const countFor = (statusIds?: string[]) =>
       payload.count({
         collection: 'tickets',
         where: {
           project: { equals: id },
-          ...(statusIds ? { status: { in: statusIds } } : {}),
+          status: { in: statusIds ?? workflowIds },
         },
       })
 
@@ -70,7 +71,9 @@ export default async function ProjectPage({ params, searchParams }: ProjectPageP
         }}
         initiatives={initiatives.docs}
         initialTab={
-          tab === 'tickets' || tab === 'cycles' || tab === 'estimates' ? tab : 'overview'
+          tab === 'tickets' || tab === 'cycles' || tab === 'estimates' || tab === 'triage'
+            ? tab
+            : 'overview'
         }
       />
     )

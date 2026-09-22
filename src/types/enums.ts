@@ -5,6 +5,7 @@ export enum TicketStatus {
 }
 
 export enum StatusType {
+  TRIAGE = 'TRIAGE',
   BACKLOG = 'BACKLOG',
   UNSTARTED = 'UNSTARTED',
   STARTED = 'STARTED',
@@ -34,6 +35,7 @@ export const TICKET_STATUS_OPTIONS = [
 ]
 
 export const STATUS_TYPE_OPTIONS = [
+  { label: 'Triage', value: StatusType.TRIAGE },
   { label: 'Backlog', value: StatusType.BACKLOG },
   { label: 'Unstarted', value: StatusType.UNSTARTED },
   { label: 'Started', value: StatusType.STARTED },

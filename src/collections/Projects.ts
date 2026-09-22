@@ -2,6 +2,7 @@ import type { CollectionConfig, PayloadRequest } from 'payload'
 import { APIError } from 'payload'
 import {
   ProjectStatus,
+  StatusType,
   PROJECT_STATUS_OPTIONS,
   PROJECT_ICONS,
   PROJECT_COLORS,
@@ -13,6 +14,14 @@ import {
 } from '@/types/enums'
 import { collectionAccess } from '@/lib/access'
 import { PROJECT_DATES, pendingDateOrderError } from '@/lib/dates'
+import {
+  DECLINED_STATUS_KEY,
+  DECLINED_STATUS_NAME,
+  DECLINED_STATUS_ORDER,
+  TRIAGE_STATUS_KEY,
+  TRIAGE_STATUS_NAME,
+  TRIAGE_STATUS_ORDER,
+} from '@/lib/triage'
 import { DEFAULT_ESTIMATE_SCALE } from '@/lib/estimates'
 import {
   DEFAULT_CYCLE_LENGTH_WEEKS,
@@ -64,6 +73,18 @@ export const Projects: CollectionConfig = {
         const dateError = pendingDateOrderError(PROJECT_DATES, data, originalDoc)
         if (dateError) throw new APIError(dateError, 400, null, true)
         return data
+      },
+    ],
+    afterChange: [
+      async ({ req, doc, previousDoc, operation }) => {
+        const wanted = Boolean((doc as { triage?: { enabled?: unknown } }).triage?.enabled)
+        const had =
+          operation === 'update' &&
+          Boolean((previousDoc as { triage?: { enabled?: unknown } })?.triage?.enabled)
+        if (wanted && !had) {
+          await ensureTriageStatus(req, doc.id)
+          await ensureDeclinedStatus(req, doc.id)
+        }
       },
     ],
     afterDelete: [
@@ -221,6 +242,24 @@ export const Projects: CollectionConfig = {
       ],
     },
     {
+      name: 'triage',
+      type: 'group',
+      admin: {
+        description: 'A holding queue for incoming work, reviewed before it reaches the backlog',
+      },
+      fields: [
+        {
+          name: 'enabled',
+          type: 'checkbox',
+          defaultValue: false,
+          admin: {
+            description:
+              'Turn triage on for this project. Off by default. Enabling it adds a Triage status that the board and list views leave out.',
+          },
+        },
+      ],
+    },
+    {
       name: 'estimates',
       type: 'group',
       admin: {
@@ -260,4 +299,69 @@ export const Projects: CollectionConfig = {
     },
   ],
   timestamps: true,
+}
+
+async function ensureTriageStatus(req: PayloadRequest, projectId: string | number): Promise<void> {
+  const existing = await req.payload.find({
+    req,
+    collection: 'statuses',
+    where: {
+      and: [{ key: { equals: TRIAGE_STATUS_KEY } }, { project: { equals: String(projectId) } }],
+    },
+    limit: 1,
+    depth: 0,
+    overrideAccess: true,
+  })
+
+  if (existing.totalDocs > 0) return
+
+  await req.payload.create({
+    req,
+    collection: 'statuses',
+    depth: 0,
+    overrideAccess: true,
+    data: {
+      name: TRIAGE_STATUS_NAME,
+      key: TRIAGE_STATUS_KEY,
+      type: StatusType.TRIAGE,
+      order: TRIAGE_STATUS_ORDER,
+      project: String(projectId),
+      description: 'Incoming work waiting to be accepted, declined or merged',
+    },
+  })
+}
+
+async function ensureDeclinedStatus(req: PayloadRequest, projectId: string | number): Promise<void> {
+  const existing = await req.payload.find({
+    req,
+    collection: 'statuses',
+    where: {
+      and: [
+        { type: { equals: StatusType.CANCELLED } },
+        {
+          or: [{ project: { equals: String(projectId) } }, { project: { exists: false } }],
+        },
+      ],
+    },
+    limit: 1,
+    depth: 0,
+    overrideAccess: true,
+  })
+
+  if (existing.totalDocs > 0) return
+
+  await req.payload.create({
+    req,
+    collection: 'statuses',
+    depth: 0,
+    overrideAccess: true,
+    data: {
+      name: DECLINED_STATUS_NAME,
+      key: DECLINED_STATUS_KEY,
+      type: StatusType.CANCELLED,
+      order: DECLINED_STATUS_ORDER,
+      project: String(projectId),
+      description: 'Work that was declined in triage, or cancelled after it was accepted',
+    },
+  })
 }

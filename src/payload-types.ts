@@ -305,6 +305,15 @@ export interface Project {
     upcomingCount?: number | null;
   };
   /**
+   * A holding queue for incoming work, reviewed before it reaches the backlog
+   */
+  triage?: {
+    /**
+     * Turn triage on for this project. Off by default. Enabling it adds a Triage status that the board and list views leave out.
+     */
+    enabled?: boolean | null;
+  };
+  /**
    * Effort estimates for tickets in this project
    */
   estimates?: {
@@ -486,7 +495,7 @@ export interface Status {
   /**
    * The semantic category. Drives the icon, the tone, and whether a ticket counts as open or closed.
    */
-  type: 'BACKLOG' | 'UNSTARTED' | 'STARTED' | 'COMPLETED' | 'CANCELLED';
+  type: 'TRIAGE' | 'BACKLOG' | 'UNSTARTED' | 'STARTED' | 'COMPLETED' | 'CANCELLED';
   /**
    * Column position, ascending. Gaps are intentional so a status can be inserted.
    */
@@ -693,6 +702,14 @@ export interface Ticket {
    * When this ticket should be completed
    */
   dueDate?: string | null;
+  /**
+   * The canonical ticket this one duplicates. Set when a triage item is merged into existing work.
+   */
+  duplicateOf?: (string | null) | Ticket;
+  /**
+   * Hide this from the triage queue until this date, or until someone touches it
+   */
+  snoozedUntil?: string | null;
   /**
    * Mark this ticket as an epic so other tickets in the same project can roll up into it
    */
@@ -1093,6 +1110,11 @@ export interface ProjectsSelect<T extends boolean = true> {
         automation?: T;
         upcomingCount?: T;
       };
+  triage?:
+    | T
+    | {
+        enabled?: T;
+      };
   estimates?:
     | T
     | {
@@ -1218,6 +1240,8 @@ export interface TicketsSelect<T extends boolean = true> {
   estimate?: T;
   startDate?: T;
   dueDate?: T;
+  duplicateOf?: T;
+  snoozedUntil?: T;
   isEpic?: T;
   epic?: T;
   subtasks?:
