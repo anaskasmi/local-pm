@@ -41,7 +41,7 @@ This MCP server provides AI models with full access to Local PM functionality:
 - `get_ticket` - Get ticket details by ID (includes subtasks)
 - `create_ticket` - Create a new ticket with optional subtasks
 - `update_ticket` - Update ticket fields
-- `move_ticket` - Move ticket between statuses (todo, in_progress, done)
+- `move_ticket` - Move ticket between statuses
 - `delete_ticket` - Delete a ticket
 
 ### Epics
@@ -59,6 +59,9 @@ This MCP server provides AI models with full access to Local PM functionality:
 - `add_comment` - Post a comment, or a reply in an existing thread
 - `update_comment` - Edit a comment body, or resolve/reopen a thread
 - `delete_comment` - Delete a comment (and its replies, if it opened the thread)
+
+### Statuses
+- `list_statuses` - List the workflow statuses a ticket can occupy, in board column order
 
 ### Labels
 - `list_labels` - List the shared labels in the workspace, with their group
@@ -320,7 +323,7 @@ Lists tickets with optional filtering.
 - `assigneeId` (string, optional): Filter by assignee (member) ID
 - `epicId` (string, optional): Only tickets that roll up into this epic
 - `isEpic` (boolean, optional): `true` for epics only, `false` for non-epic tickets only
-- `status` (string, optional): Filter by status (todo, in_progress, done)
+- `status` (string, optional): Filter by status, as a key, name or id — see `list_statuses`
 - `limit` (number, optional): Max results (default: 50)
 - `page` (number, optional): Page number (default: 1)
 
@@ -337,7 +340,7 @@ Creates a new ticket.
 - `title` (string, required): Ticket title
 - `project` (string, required): Project ID
 - `description` (string, optional): Ticket description (supports markdown)
-- `status` (string, optional): Initial status (todo, in_progress, done) - defaults to todo
+- `status` (string, optional): Initial status, as a key, name or id — see `list_statuses`. Defaults to the first status in the project workflow
 - `team` (string, optional): Assigned team ID
 - `assignee` (string, optional): Assignee member ID — use `list_members` to find one
 - `subtasks` (array, optional): Array of subtask objects with `title` and optional `completed` fields
@@ -419,7 +422,7 @@ Moves a ticket to a different status.
 
 **Parameters:**
 - `id` (string, required): Ticket ID
-- `status` (string, required): New status (todo, in_progress, done)
+- `status` (string, required): New status, as a key, name or id — see `list_statuses`
 
 ### delete_ticket
 Deletes a ticket.
@@ -446,6 +449,31 @@ Adds a new subtask to a ticket.
 **Parameters:**
 - `ticketId` (string, required): Parent ticket ID
 - `title` (string, required): Subtask title
+
+### list_statuses
+Lists the workflow statuses a ticket can occupy, in board column order.
+
+Statuses are a collection, not a fixed enum. A status is workspace-wide unless it
+is scoped to one project, in which case that project's board shows the
+workspace-wide statuses plus its own. Pass `projectId` to get the workflow a
+given project actually uses.
+
+Everywhere a tool takes a `status`, it accepts the `key`, the `name` or the `id`
+returned here, case-insensitively. An unrecognised value is rejected with the list
+of keys that were available, so a wrong guess is not silently written.
+
+The lookup is scoped to the project the ticket belongs to, so a project-scoped
+status can be set by its key or name. `create_ticket` takes the project from its
+own `project` argument; `update_ticket` and `move_ticket` read it off the ticket
+first, which costs one extra request. An `id` resolves whatever its scope, so a
+status id read from anywhere is always safe to pass.
+
+**Parameters:**
+- `projectId` (string, optional): Return this project's workflow. Omit for the workspace-wide statuses only
+
+**Returns:** `statuses` (each with `id`, `key`, `name`, `type`, `order` and a
+`scope` of `workspace` or `project`), `total`, and `default` — the key a new
+ticket gets when `status` is omitted.
 
 ### list_labels
 Lists the shared labels in the workspace. Labels are workspace-wide, not per
