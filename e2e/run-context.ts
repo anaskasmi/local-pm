@@ -2,6 +2,7 @@ import { execFileSync } from 'node:child_process'
 
 export const DEFAULT_PORT_BASE = 3020
 export const DEFAULT_PORT_SCAN_LIMIT = 20
+export const DEFAULT_MONGO_PORT_BASE = 27018
 export const DEFAULT_SOURCE_URI = 'mongodb://localhost:27018/local-pm'
 
 export interface RunContext {
@@ -12,6 +13,8 @@ export interface RunContext {
   databaseName: string
   distDir: string
   outputDir: string
+  mongoPort: number | null
+  managesMongo: boolean
 }
 
 export function withDatabase(uri: string, dbName: string): string {
@@ -37,6 +40,10 @@ export function databaseNameOf(uri: string): string {
   return path.replace(/^\//, '')
 }
 
+export function localMongoUri(port: number): string {
+  return `mongodb://localhost:${port}/local-pm`
+}
+
 export function parsePort(value: string | undefined): number | null {
   if (value === undefined || value.trim() === '') return null
   const port = Number(value)
@@ -44,6 +51,39 @@ export function parsePort(value: string | undefined): number | null {
     throw new Error(`E2E_PORT must be an integer between 1 and 65535, received "${value}".`)
   }
   return port
+}
+
+export function mongoPortFor(
+  appPort: number,
+  appBase = DEFAULT_PORT_BASE,
+  mongoBase = DEFAULT_MONGO_PORT_BASE,
+): number {
+  const port = mongoBase + (appPort - appBase)
+  if (!Number.isInteger(port) || port < 1 || port > 65535) {
+    throw new Error(
+      `Deriving a mongod port from app port ${appPort} gave ${port}, which is out of range. ` +
+        'Pin one with E2E_MONGO_PORT.',
+    )
+  }
+  return port
+}
+
+export interface MongoResolution {
+  sourceUri: string
+  mongoPort: number | null
+  managesMongo: boolean
+}
+
+export function resolveMongo(env: RunEnv, appPort: number): MongoResolution {
+  if (env.E2E_MONGO_URI) {
+    return { sourceUri: env.E2E_MONGO_URI, mongoPort: null, managesMongo: false }
+  }
+
+  const port =
+    parsePort(env.E2E_MONGO_PORT) ??
+    mongoPortFor(appPort, parsePort(env.E2E_PORT_BASE) ?? DEFAULT_PORT_BASE)
+
+  return { sourceUri: localMongoUri(port), mongoPort: port, managesMongo: true }
 }
 
 const PROBE = `
@@ -98,10 +138,10 @@ export function resolveRunContext(env: RunEnv = process.env): RunContext {
       Number(env.E2E_PORT_SCAN_LIMIT ?? DEFAULT_PORT_SCAN_LIMIT),
     )
 
-  const sourceUri = env.DATABASE_URI ?? DEFAULT_SOURCE_URI
-  const databaseUri = env.E2E_DATABASE_URI ?? withDatabase(sourceUri, databaseNameFor(port))
+  const mongo = resolveMongo(env, port)
+  const databaseUri = env.E2E_DATABASE_URI ?? withDatabase(mongo.sourceUri, databaseNameFor(port))
 
-  if (databaseUri === sourceUri) {
+  if (env.DATABASE_URI !== undefined && databaseUri === env.DATABASE_URI) {
     throw new Error(
       'Refusing to run e2e against the same database as DATABASE_URI. Set E2E_DATABASE_URI explicitly.',
     )
@@ -113,10 +153,12 @@ export function resolveRunContext(env: RunEnv = process.env): RunContext {
   return {
     port,
     baseUrl: `http://127.0.0.1:${port}`,
-    sourceUri,
+    sourceUri: mongo.sourceUri,
     databaseUri,
     databaseName: databaseNameOf(databaseUri),
     distDir: distDirFor(port),
     outputDir: outputDirFor(port),
+    mongoPort: mongo.mongoPort,
+    managesMongo: mongo.managesMongo,
   }
 }
