@@ -2,7 +2,7 @@
   "$comment": "Committed to the repo on purpose: this is the public statement of where local-pm is going, so contributors can aim at it. Read agentInstructions before touching anything below.",
   "version": 1,
   "createdAt": "2026-09-19",
-  "lastUpdated": "2026-09-21",
+  "lastUpdated": "2026-10-08",
   "source": "Feature gap analysis of local-pm against Linear, Jira, Plane, Asana, Monday, Notion, and the self-hosted field (Huly, Taiga, OpenProject, Vikunja, Focalboard).",
   "agentInstructions": {
     "purpose": "This is the single source of truth for what is planned, what is in flight, and what is finished in this repo. Keep it accurate. A stale roadmap is worse than no roadmap.",
@@ -1353,7 +1353,7 @@
       "slug": "e2e-against-local-mongo",
       "title": "Run the e2e suite against a local Mongo instead of Atlas",
       "tier": 1,
-      "status": "todo",
+      "status": "in_progress",
       "effort": "S",
       "summary": "The Playwright suite currently drives a remote Atlas cluster. Point it at a local mongod so the suite does not pay a network round trip per query and cannot be throttled by a shared tier.",
       "rationale": "Task 54 got verify green, but the one failure it had to work around was a read ECONNRESET when 20 concurrent ticket creates hit Atlas at once, and the mitigation (a pre-warmed connection pool) is unproven. A local mongod removes the latency and the shared-tier connection limits that produce that class of failure, and it makes the suite runnable offline.",
@@ -1366,7 +1366,7 @@
         "e2e/run-context.ts",
         "README.md"
       ],
-      "startedAt": null,
+      "startedAt": "2026-10-08",
       "completedAt": null,
       "notes": "Raised from task 54 on 2026-09-21. The default source URI in playwright.config.ts and e2e/global-setup.ts is already mongodb://localhost:27018/local-pm, so the wiring assumes a local instance; this machine has nothing listening on 27018 and .env points DATABASE_URI at mongodb+srv Atlas. Options worth weighing: mongodb-memory-server as a devDependency (no install step, but it downloads a binary on first run), a documented docker compose service, or simply documenting the expectation and failing with a clear message when nothing is listening. Whichever is chosen, keep E2E_DATABASE_URI as the explicit override."
     },
