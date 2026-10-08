@@ -284,7 +284,7 @@
       "slug": "estimates-and-charts",
       "title": "Estimates, burndown and velocity",
       "tier": 1,
-      "status": "in_progress",
+      "status": "done",
       "effort": "M",
       "summary": "Point or t-shirt estimates on tickets, plus burndown and velocity charts per cycle.",
       "rationale": "Taiga's whole pitch; Plane and Jira ship it as standard. Meaningless without cycles.",
@@ -300,8 +300,8 @@
         "src/components/"
       ],
       "startedAt": "2026-09-21",
-      "completedAt": null,
-      "notes": "Load the dataviz skill before writing chart code."
+      "completedAt": "2026-09-21",
+      "notes": "Shipped in commit 2b9176d on feat/estimates-and-charts, merged to main as PR #33. ESTIMATES: tickets.estimate is always a number; projects.estimates holds { enabled, scale } with scale in LINEAR/FIBONACCI/EXPONENTIAL/TSHIRT. T-shirt sizes map onto the fibonacci values (XS=1, S=2, M=3, L=5, XL=8) exactly as Linear does, so every scale sums and switching scale relabels existing estimates rather than rewriting them; a value the current scale no longer offers is still shown rather than hidden. Estimates are OFF by default, so existing installs need no migration and the charts count tickets until a project opts in. Pure logic in src/lib/estimates.ts. BURNDOWN, and why it is built this way: the incumbents were checked first. Jira rebuilds its sprint report from the issue changelog and re-derives retrospectively; Linear plots scope over time from issue history and shows scope added/removed; Plane finalises the chart when a cycle ends and keeps that as the record. Both halves are taken. OPEN cycles replay the activity trail backwards from each ticket current state (src/lib/burndown.ts, pure, 22 Vitest cases) - status, cycle and estimate are already tracked fields, so scope changes, reopened tickets and late re-estimates land on the day they happened, including for cycles that ran before this commit, with no backfill. CLOSED cycles read cycles.progressSnapshot, frozen at close and taken BEFORE rollover moves unfinished tickets out, so the chart shows the cycle as it was lived, cannot drift when tickets are edited later, and velocity over six cycles costs no replay. To make the replay exact rather than name-matched, activity rows now carry fromId/toId beside the display names (additive, no migration). Older rows have no ids and fall back to matching on name; a status renamed since then resolves to null, which the replay counts as open work rather than guessing. A ticket is also kept out of scope on days before its createdAt, so one created mid-cycle no longer shows in the day-one commitment. CHARTS: inline SVG on the existing tokens, no chart dependency added. Emphasis form - accent for the series carrying the story, de-emphasis grey for context, dashed hairline for the ideal/average reference. The dataviz skill validator was run on the real token values in both themes: accent vs neutral separates at deltaE 18.9 light / 17.6 dark under protanopia (floor 8) and both clear 3:1 on the surface; the chroma FAIL it reports on grey is expected for a de-emphasis slot, which does no identity work. Legend plus a Show data table on both charts, so no value is reachable only by hovering; charts render at the container measured width rather than scaling a fixed viewBox, so axis text keeps its size on a phone; the plot is focusable and steps through days with the arrow keys, announced through a live region. SURFACES: estimate picker on the ticket form and ticket detail, an Estimate column on the tickets table, an estimate badge on the board card (the user asked for it - the card is at 4 metadata items, which is the budget in 05-board-and-dnd.md, so nothing else may be added there), a new Estimates tab on the project (its own URL, rather than hiding estimate settings under a tab labelled Cycles), burndown on /cycles/[id] and velocity on /cycles. API and MCP parity: GET /api/cycles/:id/burndown (?live=true bypasses the snapshot) and GET /api/cycles/velocity?project=. MCP gained estimate on create_ticket/update_ticket (accepts a number or a t-shirt size), estimates on update_project, and two tools, get_cycle_burndown and get_velocity. Verified: npm run verify exit 0 - typecheck, 297 Vitest, 143 Playwright, with E2E_PORT pinned to 3031 so it could not collide with the session working task 54. Ten new specs in e2e/estimates.spec.ts cover the settings tab, form storage, t-shirt point values, the activity trail, rejection of a zero estimate, the points burndown and its data table, the named series, velocity after a close, and that a frozen chart does not move when its tickets change afterwards. Getting there took four full runs: three failed on Atlas socket resets (read ECONNRESET, and getaddrinfo ENOTFOUND on the shard host) that hit DIFFERENT specs each time - once the 20-concurrent-creates regression, once accessibility/activity/assignees at startup - and every one of those specs passed in isolation, on this branch and on unmodified main. That is tasks 58 and 59, not this work; the evidence is recorded there. Deliberately left out: the cycle progress bar and the cycle list rows still count tickets rather than points (task 60); no progressSnapshot backfill for cycles closed before this commit, which replay from activity instead; the activity trail shows estimates as point values rather than scale labels, since the differ has no project context."
     },
     {
       "id": 9,
@@ -379,7 +379,7 @@
       "slug": "triage-intake",
       "title": "Triage / intake inbox",
       "tier": 1,
-      "status": "todo",
+      "status": "in_progress",
       "effort": "M",
       "summary": "A holding state for incoming work — accept, reject, merge into an existing ticket, or route to a project — before it reaches the backlog.",
       "rationale": "Linear Triage, Plane Intake. Stops the backlog becoming a dumping ground, and is the natural place for agent-created tickets to await human review.",
@@ -395,7 +395,7 @@
         "src/collections/",
         "src/app/(frontend)/"
       ],
-      "startedAt": null,
+      "startedAt": "2026-09-21",
       "completedAt": null,
       "notes": ""
     },
