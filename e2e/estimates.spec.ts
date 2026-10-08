@@ -181,6 +181,11 @@ test('a cycle keeps its chart after closing, and velocity appears', async ({ pag
   const cycles = await enableCycles(request, scoped.projectId)
   const active = cycles[0]
 
+  const pinned = await request.patch(`/api/cycles/${active.id}`, {
+    data: { startsAt: new Date().toISOString() },
+  })
+  expect(pinned.ok()).toBeTruthy()
+
   await createTicket(request, scoped, { title: 'Shipped', status: 'DONE', cycle: active.id, estimate: 5 })
   await createTicket(request, scoped, { title: 'Slipped', status: 'TODO', cycle: active.id, estimate: 3 })
 
