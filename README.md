@@ -310,23 +310,45 @@ npm run test:e2e    # playwright — full browser E2E
 npm run verify      # all three
 ```
 
-E2E tests run against their **own database** (`local-pm-e2e-<port>`, derived from
-`DATABASE_URI`), never your working one. Everything a run touches is keyed to its
-port — database, build directory (`.next-e2e-<port>`) and artifacts
-(`test-results-<port>`) — and the port is claimed by scanning upward from 3020 for
-a free one. Concurrent runs therefore isolate themselves with no setup, and the
-suite never attaches to an already-running server.
+E2E tests run against a **local mongod**, never your working database and never
+the cluster in `DATABASE_URI`. The suite starts its own `mongod` for the run and
+stops it afterwards, so a run needs no database setup, costs no network round
+trip per query, cannot be throttled by a shared Atlas tier, and works offline.
+
+The first run on a machine downloads a mongod binary (about 600MB) into
+`~/.cache/mongodb-binaries`. That cache is shared by every checkout and
+worktree, so it is paid once, not once per branch.
+
+It is a single-member **replica set** rather than a standalone server because
+Payload writes inside transactions, and a standalone mongod cannot serve those.
+
+Everything a run touches is keyed to its port — database (`local-pm-e2e-<port>`),
+mongod port, build directory (`.next-e2e-<port>`) and artifacts
+(`test-results-<port>`) — and the app port is claimed by scanning upward from
+3020 for a free one. Two runs therefore share no resource and neither can stop
+the other's database.
 
 Each run starts from an empty database: `global-setup` clears every collection
 before the migrations seed it, so test data cannot accumulate between runs.
 
+To use a mongod you run yourself (a native install, or a compose service), point
+`E2E_MONGO_URI` at it and the suite will not start one:
+
+```bash
+E2E_MONGO_URI=mongodb://localhost:27017/local-pm npm run test:e2e
+```
+
 | Variable | Default | Use |
 |---|---|---|
-| `E2E_PORT` | first free from 3020 | Pin the port, and with it the database, build dir and artifacts |
+| `E2E_PORT` | first free from 3020 | Pin the app port, and with it the database, mongod port, build dir and artifacts |
 | `E2E_PORT_BASE` | `3020` | Where the scan starts |
 | `E2E_PORT_SCAN_LIMIT` | `20` | How many ports the scan tries |
-| `E2E_DATABASE_URI` | derived from `DATABASE_URI` | Point the suite at a specific database |
+| `E2E_MONGO_URI` | unset | Use a mongod you already run, instead of a managed one |
+| `E2E_MONGO_PORT` | `27018` + the app port's offset | Pin the managed mongod's port |
+| `E2E_DATABASE_URI` | derived from the local mongod | Point the suite at a specific database |
 | `E2E_KEEP_DATABASE` | unset | Set to `true` to keep the previous run's data |
+| `MONGOMS_VERSION` | `7.0.14` | The mongod the suite downloads and runs |
+| `MONGOMS_DOWNLOAD_DIR` | `~/.cache/mongodb-binaries` | Where that binary is cached |
 
 First run needs browsers:
 

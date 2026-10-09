@@ -28,7 +28,7 @@ async function resetDatabase(payload: Payload): Promise<number> {
 export default async function globalSetup(config?: FullConfig) {
   const run = runContextOf(config)
 
-  if (run.databaseUri === run.sourceUri) {
+  if (run.databaseUri === process.env.DATABASE_URI) {
     throw new Error('Refusing to migrate the working database from the e2e setup.')
   }
 
@@ -45,7 +45,9 @@ export default async function globalSetup(config?: FullConfig) {
 
     if (process.env.E2E_KEEP_DATABASE !== 'true') {
       const cleared = await resetDatabase(payload)
-      console.log(`[e2e] port ${run.port} · ${run.databaseName} · cleared ${cleared} documents`)
+      console.log(
+        `[e2e] port ${run.port} · ${run.databaseName} · ${run.sourceUri} · cleared ${cleared} documents`,
+      )
     }
 
     const report = await migrateTicketStatuses(payload)

@@ -1353,7 +1353,7 @@
       "slug": "e2e-against-local-mongo",
       "title": "Run the e2e suite against a local Mongo instead of Atlas",
       "tier": 1,
-      "status": "in_progress",
+      "status": "done",
       "effort": "S",
       "summary": "The Playwright suite currently drives a remote Atlas cluster. Point it at a local mongod so the suite does not pay a network round trip per query and cannot be throttled by a shared tier.",
       "rationale": "Task 54 got verify green, but the one failure it had to work around was a read ECONNRESET when 20 concurrent ticket creates hit Atlas at once, and the mitigation (a pre-warmed connection pool) is unproven. A local mongod removes the latency and the shared-tier connection limits that produce that class of failure, and it makes the suite runnable offline.",
@@ -1367,8 +1367,8 @@
         "README.md"
       ],
       "startedAt": "2026-10-08",
-      "completedAt": null,
-      "notes": "Raised from task 54 on 2026-09-21. The default source URI in playwright.config.ts and e2e/global-setup.ts is already mongodb://localhost:27018/local-pm, so the wiring assumes a local instance; this machine has nothing listening on 27018 and .env points DATABASE_URI at mongodb+srv Atlas. Options worth weighing: mongodb-memory-server as a devDependency (no install step, but it downloads a binary on first run), a documented docker compose service, or simply documenting the expectation and failing with a clear message when nothing is listening. Whichever is chosen, keep E2E_DATABASE_URI as the explicit override."
+      "completedAt": "2026-10-08",
+      "notes": "Shipped on branch fix/e2e-against-local-mongo. THE DEFECT: run-context.ts resolved the e2e source as `env.DATABASE_URI ?? DEFAULT_SOURCE_URI`. dotenv.config() runs in playwright.config.ts and .env points DATABASE_URI at Atlas, so the local default was dead code and every run drove the remote cluster, which is the thing this task was raised to stop. The e2e source is now always local and never reads DATABASE_URI. HOW THE LOCAL MONGOD IS PROVIDED: mongodb-memory-server as a devDependency, started by Playwright as a second webServer entry and stopped with the run. Chosen over the docker compose option this task suggested because the compose mongodb service publishes no host port on purpose (note 2 in docker-compose.yml), so it cannot serve the suite, and because no docker daemon and no mongod were running on this machine to test against. E2E_MONGO_URI points the suite at a mongod you run yourself and skips the managed one. A SINGLE MEMBER REPLICA SET, not a standalone server: Payload writes inside transactions and a standalone mongod cannot serve those. e2e/local-mongo.spec.ts asserts a write round trip so a regression to standalone fails loudly rather than mysteriously. CONCURRENCY: the mongod port is paired to the app port (3020 to 27018, 3021 to 27019) by mongoPortFor, so two sessions never share a mongod and neither can stop the other database out from under it. Sharing one instance was the failure mode behind most of task 54 notes. Playwright runs createPluginSetupTasks before globalSetups, checked in the installed playwright source, so mongod is listening before global-setup connects. The binary cache is ~/.cache/mongodb-binaries, shared by every checkout and worktree, so the 591MB download is paid once per machine rather than once per branch. package.json config.mongodbMemoryServer pins 7.0.14 and sets disablePostinstall so npm install stays fast and works offline. The DATABASE_URI guard got stronger rather than weaker: it now compares the resolved e2e database against the working one directly, instead of against the derived source. VERIFIED: npm run verify exit 0. Typecheck clean, 343 Vitest, 175 Playwright. Ten new unit cases in tests/e2eRunContext.test.ts, one of them asserting that a remote DATABASE_URI can never leak into the suite, plus three new specs in e2e/local-mongo.spec.ts. ON THE ECONNRESET THIS TASK WAS RAISED FOR: the 20-concurrent-creates spec passed against local mongo. One green run is not proof and task 58 still owns that spec, so nothing is claimed here beyond the observation. The MONGO_MIN_POOL_SIZE 30 pre-warm from task 54 is left in place rather than removed in the same change, since it is now probably unnecessary and that is worth its own change. The first full run on this branch failed one unrelated pre-existing spec, which is recorded and fixed as task 63. DELIBERATELY LEFT OUT: a docker compose e2e mongodb service, for the published-port reason above. Removing the connection pool pre-warm."
     },
     {
       "id": 61,
@@ -1407,6 +1407,24 @@
       "startedAt": null,
       "completedAt": null,
       "notes": "Found while merging task 11. The e2e suite hid it because specs that pick from a picker happened to seed names that sort early; adding seven more projects made e2e/initiatives.spec.ts fail on a project that was real and simply not on the first page. Cheapest honest fix is a footer line - \"20 of 34, keep typing to narrow\" - rather than paging a popover. Worth checking every EntitySelect caller at the same time; the board project filter in e2e/accessibility.spec.ts has the same latent dependence on alphabetical luck and only passes today because \"a11y\" sorts early."
+    },
+    {
+      "id": 63,
+      "slug": "estimates-spec-only-passes-on-mondays",
+      "title": "Frozen burndown assertion is date dependent",
+      "tier": 0,
+      "status": "done",
+      "effort": "S",
+      "summary": "e2e/estimates.spec.ts asserted a closed cycle committed 8 points, which is only true when the suite runs on the cycle first day, so npm run verify failed on every day except Monday.",
+      "rationale": "npm run verify is the gate for every task in this file. This spec made it red six days a week, which is the same loss of a working gate that task 54 was raised for.",
+      "dependsOn": [],
+      "unblocks": [],
+      "touches": [
+        "e2e/estimates.spec.ts"
+      ],
+      "startedAt": "2026-10-08",
+      "completedAt": "2026-10-08",
+      "notes": "Found by the first full run of task 59 and fixed with it, in its own commit. NOT a bug in the burndown. committed is the day-one scope (src/lib/burndown.ts:145) and existsBy (:69) keeps a ticket out of scope on days before its createdAt, which is exactly what task 8 documented and intended. The test enabled cycles with startDay 1, so reconcile created a cycle starting the most recent Monday, then created its tickets now. Task 8 shipped on Monday 2026-09-21, when the cycle first day was the day of the run and the tickets did exist on it, so committed was 8 and the spec was green. Run on Thursday 2026-10-08 the cycle had started on Monday 2026-10-05 and the tickets did not exist on day one, so committed was 0. Confirmed pre-existing and unrelated to task 59: src/ and e2e/estimates.spec.ts were byte identical to main, and the failure reproduced against Atlas by pointing the same branch back at it with E2E_MONGO_URI. It failed 3 of 3 repeats, so it was deterministic rather than flaky, which is why it does not belong to task 58. FIX: the test pins the cycle startsAt to today before creating its tickets, so day zero boundary is endOfDay(today) and the tickets are inside it whatever weekday the suite runs. Intent of the assertion is unchanged. Verified with --repeat-each=2 on a Thursday, 20 of 20 green, then in a full npm run verify. Worth knowing: any future assertion on committed or deliveryRate is date dependent unless the cycle start is pinned the same way."
     }
   ]
 }
