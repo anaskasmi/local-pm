@@ -2,7 +2,7 @@
   "$comment": "Committed to the repo on purpose: this is the public statement of where local-pm is going, so contributors can aim at it. Read agentInstructions before touching anything below.",
   "version": 1,
   "createdAt": "2026-09-19",
-  "lastUpdated": "2026-10-08",
+  "lastUpdated": "2026-10-30",
   "source": "Feature gap analysis of local-pm against Linear, Jira, Plane, Asana, Monday, Notion, and the self-hosted field (Huly, Taiga, OpenProject, Vikunja, Focalboard).",
   "agentInstructions": {
     "purpose": "This is the single source of truth for what is planned, what is in flight, and what is finished in this repo. Keep it accurate. A stale roadmap is worse than no roadmap.",
@@ -1425,6 +1425,28 @@
       "startedAt": "2026-10-08",
       "completedAt": "2026-10-08",
       "notes": "Found by the first full run of task 59 and fixed with it, in its own commit. NOT a bug in the burndown. committed is the day-one scope (src/lib/burndown.ts:145) and existsBy (:69) keeps a ticket out of scope on days before its createdAt, which is exactly what task 8 documented and intended. The test enabled cycles with startDay 1, so reconcile created a cycle starting the most recent Monday, then created its tickets now. Task 8 shipped on Monday 2026-09-21, when the cycle first day was the day of the run and the tickets did exist on it, so committed was 8 and the spec was green. Run on Thursday 2026-10-08 the cycle had started on Monday 2026-10-05 and the tickets did not exist on day one, so committed was 0. Confirmed pre-existing and unrelated to task 59: src/ and e2e/estimates.spec.ts were byte identical to main, and the failure reproduced against Atlas by pointing the same branch back at it with E2E_MONGO_URI. It failed 3 of 3 repeats, so it was deterministic rather than flaky, which is why it does not belong to task 58. FIX: the test pins the cycle startsAt to today before creating its tickets, so day zero boundary is endOfDay(today) and the tickets are inside it whatever weekday the suite runs. Intent of the assertion is unchanged. Verified with --repeat-each=2 on a Thursday, 20 of 20 green, then in a full npm run verify. Worth knowing: any future assertion on committed or deliveryRate is date dependent unless the cycle start is pinned the same way."
+    },
+    {
+      "id": 64,
+      "slug": "survive-atlas-transient-aborts-and-wrapper-kills",
+      "title": "Retry writes Atlas rolls back, and keep exactly one local server alive",
+      "tier": 0,
+      "status": "in_progress",
+      "effort": "S",
+      "summary": "Writes failed with a bare 'Something went wrong.' whenever Atlas aborted the transaction (TransientTransactionError), and the scheduled-task wrapper could be killed with nothing to bring it back. REST writes now replay a rolled-back transaction, the Mongo pool is capped, and the start script relaunches every 5 minutes while refusing to run a second wrapper or a second server.",
+      "rationale": "On a loaded laptop four ticket writes in a row failed with TransientTransactionError while reads worked, and the server stayed down for an hour after its wrapper exited with 0xC000013A (a console close), because the task only triggered at logon. Every agent session depends on this API.",
+      "dependsOn": [],
+      "unblocks": [],
+      "touches": [
+        "src/lib/transient-transaction.ts",
+        "src/app/(payload)/api/[...slug]/route.ts",
+        "src/payload.config.ts",
+        "start-local-pm.ps1",
+        "tests/transientTransaction.test.ts"
+      ],
+      "startedAt": "2026-10-29",
+      "completedAt": null,
+      "notes": "A config afterError hook (markTransientTransaction) maps an error labelled TransientTransactionError to a 503 with transient: true; the REST route wraps POST/PATCH/PUT/DELETE in withTransientRetry, which buffers the body once and replays up to 2 more times on that 503 only, sequentially, so no extra connections. Reads are not retried. A retried create can skip a ticket number, because generateTicketId increments the project counter outside the transaction; numbers never duplicate. maxPoolSize defaults to 10 when MONGO_MAX_POOL_SIZE is unset (driver default was 100 per host). start-local-pm.ps1 takes a Global\\local-pm-wrapper mutex (an abandoned one is taken over), never starts the server while port 3010 already listens, and logs which wrapper owns the lock; the scheduled task gained a 5-minute repetition trigger with MultipleInstances IgnoreNew (machine config, not in git). Verified on the Windows laptop: second wrapper exits 0, a killed wrapper is replaced without a second server, 1 listener on 3010. npx tsc clean, vitest 351/351 (8 new, mutation-checked). STILL OPEN before done: the Playwright half of npm run verify was not run, and the other laptop needs the new trigger added to its scheduled task."
     }
   ]
 }

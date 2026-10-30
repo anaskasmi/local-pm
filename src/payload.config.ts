@@ -18,6 +18,9 @@ import { Teams } from './collections/Teams'
 import { Tickets } from './collections/Tickets'
 import { Users } from './collections/Users'
 import { CYCLE_CRON, CYCLE_QUEUE, cycleCronEnabled, cycleRolloverTask } from './jobs/cycle-rollover'
+import { markTransientTransaction } from './lib/transient-transaction'
+
+const DEFAULT_MAX_POOL_SIZE = 10
 
 const optionalNumber = (value: string | undefined): number | undefined =>
   value === undefined || value.trim() === '' ? undefined : Number(value)
@@ -53,6 +56,9 @@ export default buildConfig({
       ? [{ cron: CYCLE_CRON, queue: CYCLE_QUEUE, limit: 10 }]
       : [],
   },
+  hooks: {
+    afterError: [markTransientTransaction],
+  },
   editor: lexicalEditor(),
   secret: process.env.PAYLOAD_SECRET || '',
   typescript: {
@@ -63,7 +69,7 @@ export default buildConfig({
     connectOptions: {
       serverSelectionTimeoutMS: Number(process.env.MONGO_SERVER_SELECTION_TIMEOUT_MS ?? 10000),
       minPoolSize: optionalNumber(process.env.MONGO_MIN_POOL_SIZE),
-      maxPoolSize: optionalNumber(process.env.MONGO_MAX_POOL_SIZE),
+      maxPoolSize: optionalNumber(process.env.MONGO_MAX_POOL_SIZE) ?? DEFAULT_MAX_POOL_SIZE,
     },
   }),
 })
